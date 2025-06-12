@@ -1,2 +1,6 @@
 kaldi/
 vosk-model-en-us-0.22/
+.env
+eval _$(ssh-agent -s)_
+eval
+
