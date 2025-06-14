@@ -26,7 +26,7 @@ API_KEY = os.getenv("API_KEY")
 headers = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
 
 SAMPLE_RATE = 16000
-WAKE_WORD = "hello"
+WAKE_WORD = "jarvis"
 
 q = queue.Queue()
 
@@ -34,18 +34,25 @@ is_speaking = False
 
 #######################################################################
 
+def show_progress(block_num, block_size, total_size):
+    downloaded = block_num * block_size
+    percent = downloaded * 100 / total_size if total_size > 0 else 0
+    bar_length = 40
+    filled_length = int(bar_length * percent // 100)
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+    sys.stdout.write(f'\rDownloading: |{bar}| {percent:.2f}%')
+    sys.stdout.flush()
+
 if not os.path.exists(MODEL_PATH):
     print("Downloading Model")
-    urllib.request.urlretrieve(MODEL_URL, MODEL_ZIP)
-
-    print("Unzipping Model")
+    urllib.request.urlretrieve(MODEL_URL, MODEL_ZIP, reporthook=show_progress)
+    print("\nUnzipping Model")
     with zipfile.ZipFile(MODEL_ZIP, 'r') as zip_ref:
         zip_ref.extractall()
-
     os.remove(MODEL_ZIP)
     print("Model Ready")
 
-engine = pyttsx3.init(driverName='nsss')
+engine = pyttsx3.init()  # Automatically picks the correct driver for your OS
 
 #######################################################################
 
@@ -77,7 +84,7 @@ def speak(text):
     is_speaking = True
     engine.setProperty('volume', 1.0)
     voices = engine.getProperty('voices')
-    engine.setProperty("voice", voices[132].id)
+    engine.setProperty("voice", voices[0].id)
     engine.setProperty("rate", 165)
     engine.say(text)
     engine.runAndWait()
@@ -144,6 +151,7 @@ def listen_for_wake_and_command(recognizer):
         speak(reply)
 
     except requests.exceptions.RequestException as e:
+        print('error: ' + str(e))
         return {"error": str(e)}
 
     return True
