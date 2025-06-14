@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from vosk import Model, KaldiRecognizer
 from keyword_listener import device_index
 
+from datetime import datetime
 
 #######################################################################
 
@@ -20,6 +21,7 @@ load_dotenv()
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.21.zip"
 MODEL_PATH = "vosk-model-en-us-0.21"
 MODEL_ZIP = "vosk-model-en-us-0.21.zip"
+CACHE_FILE = ".input_device_cache"
 
 API_URL = os.getenv("API_URL")
 API_KEY = os.getenv("API_KEY")
@@ -32,6 +34,7 @@ q = queue.Queue()
 
 is_speaking = False
 
+
 #######################################################################
 
 def show_progress(block_num, block_size, total_size):
@@ -42,6 +45,7 @@ def show_progress(block_num, block_size, total_size):
     bar = '█' * filled_length + '-' * (bar_length - filled_length)
     sys.stdout.write(f'\rDownloading: |{bar}| {percent:.2f}%')
     sys.stdout.flush()
+
 
 if not os.path.exists(MODEL_PATH):
     print("Downloading Model")
@@ -54,30 +58,40 @@ if not os.path.exists(MODEL_PATH):
 
 engine = pyttsx3.init()  # Automatically picks the correct driver for your OS
 
+
 #######################################################################
 
+
 def choose_input_device():
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r") as f:
+            cached_index = f.read().strip()
+            if cached_index.isdigit():
+                print(f"Using cached input device index: {cached_index}")
+                return int(cached_index)
+
     print("Choose input device")
     devices = sd.query_devices()
-    print(type(devices[3]))
-    print(devices[3])
 
     for idx, dev in enumerate(devices):
         if dev['max_input_channels'] > 0:
             print(f"{idx}: {dev['name']}")
+
     while True:
         try:
             idex = int(input("Choose input device: "))
             device_info = devices[idex]
-
             max_input_channels = device_info.get("max_input_channels", 0)
 
             if max_input_channels > 0:
+                with open(CACHE_FILE, "w") as f:
+                    f.write(str(idex))
                 return idex
             else:
                 print("No input channels found on device")
         except (ValueError, IndexError):
             print("Invalid input")
+
 
 def speak(text):
     global is_speaking
@@ -92,11 +106,13 @@ def speak(text):
     time.sleep(0.2)
     print(f">>> {text}")
 
+
 def audio_callback(indata, frames, time, status):
     if status:
         print(status, file=sys.stderr)
     if not is_speaking:
         q.put(bytes(indata))
+
 
 def listen_for_wake_and_command(recognizer):
     print("Listening...")
@@ -104,6 +120,7 @@ def listen_for_wake_and_command(recognizer):
     collected = ""
     last_speech_time = time.time()
     silence_timeout = 2.5
+    speak(f"Listening for the wake-word, '{WAKE_WORD}'")
 
     with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=2000, dtype='int16',
                            channels=1, callback=audio_callback, device=device_index):
@@ -140,13 +157,19 @@ def listen_for_wake_and_command(recognizer):
 
     print(f"[FINAL COMMAND] {cleaned}")
 
-    payload = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": cleaned}], "temperature": 0.7}
+    today_date = datetime.now().strftime("%B %d, %Y")
+
+    payload = {"model": "gpt-4.1-mini",
+               "tools": [{"type": "web_search_preview"}],
+               "instructions": f"You are jarvis, a genius AI system that has the ability to assist Lucas and guests of Lucas's house with their tasks and questions. Today's date: {today_date}",
+               "max_output_tokens": 1000, "user": "Lucas",
+               "input": cleaned, "temperature": 0.7}
     try:
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
 
-        reply = data.get("choices", [{}])[0].get("message", {}).get("content", "Sorry, no reply.")
+        reply = data.get("output", [{}])[0].get("content", "Sorry, no reply.")[0]['text']
         print(f"[AI] {reply} ")
         speak(reply)
 
@@ -155,6 +178,7 @@ def listen_for_wake_and_command(recognizer):
         return {"error": str(e)}
 
     return True
+
 
 #######################################################################
 
@@ -166,12 +190,10 @@ def main():
     model = Model(MODEL_PATH)
     recognizer = KaldiRecognizer(model, SAMPLE_RATE)
 
-    speak(f"Listening for the wake-word, '{WAKE_WORD}'")
 
     while True:
         if not listen_for_wake_and_command(recognizer):
-           break
-        speak(f"Back to waiting for wake word, '{WAKE_WORD}'")
+            break
 
 #######################################################################
 

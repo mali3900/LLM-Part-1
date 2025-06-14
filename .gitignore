@@ -4,3 +4,4 @@ vosk-model-en-us-0.22/
 eval _$(ssh-agent -s)_
 eval
 vosk-model-en-us-0.21/
+.input_device_cache
