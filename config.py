@@ -14,6 +14,6 @@ API_KEY = os.getenv("API_KEY")
 HEADERS = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
 
 SAMPLE_RATE = 16000
-WAKE_WORD = "jarvis"
+WAKE_WORD = "celeste"
 
 audio_queue = queue.Queue()

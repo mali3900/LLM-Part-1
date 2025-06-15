@@ -1,3 +1,5 @@
+import os
+
 from vosk import Model, KaldiRecognizer
 from model_manager import download_and_setup_model
 from audio_device import choose_input_device
@@ -13,6 +15,7 @@ def main():
 
     print(f"Loading Model From {MODEL_PATH}")
     model = Model(MODEL_PATH)
+    os.environ["VOSK_LOG_LEVEL"] = "0"
     recognizer = KaldiRecognizer(model, SAMPLE_RATE)
 
     while True:
